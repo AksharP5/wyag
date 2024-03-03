@@ -130,3 +130,24 @@ def repo_create(path):
         config.write(f)
 
     return repo
+
+def repo_default_config():
+    ret = configparser.ConfigParser()
+
+    ret.add_section("core")
+    """
+    The version of the gitdir format. 0 means the initial format,
+    1 the same with extensions. If > 1, git will panic; wyag will only
+    accept 0
+    """
+    ret.set("core", "repositoryformatversion", "0")
+    # disable tracking of file mode (permissions) changes in the work tree
+    ret.set("core", "filemode", "false")
+    """
+    indicates that this repo has a worktree. Git supports an optional worktree key
+    which indicates the location of the worktree, if not ..; wyag doesn't
+    """
+    ret.set("core", "bare", "false")
+
+    return ret
+
