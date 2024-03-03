@@ -265,3 +265,138 @@ class GitBlob(GitObject):
     def deserialize(self, data):
         self.blobdata = data
 
+argsp = argsubparsers.add_parser("cat-file", help="Provide content of repository objects")
+
+argsp.add_argument("type", metavar="type", 
+                   choices=["blob", "commit", "tag", "tree"],
+                   help="Specifiy the type")
+
+argsp.add_argument("object", 
+                   metavar="object",
+                   help="The object to display")
+
+def cmd_cat_file(args): 
+    repo = repo_find()
+    cat_file(repo, args.object, fmt=args.type.encode())
+
+def cat_file(repo, obj, fmt=None):
+    obj = object_read(repo, object_find(repo, obj, fmt=fmt))
+    sys.stdout.buffer.write(obj.serialize())
+
+def object_find(repo, name, fmt=None, follow=True):
+    return name
+
+argsp = argsubparsers.add_parser(
+    "hash-object",
+    help="Compute object ID and optionally creates a blob from a file")
+
+argsp.add_argument("-t",
+                   metavar="type",
+                   dest="type",
+                   choices=["blob", "commit", "tag", "tree"],
+                   default="blob",
+                   help="Specify the type")
+
+argsp.add_argument("-w",
+                   dest="write",
+                   action="store_true",
+                   help="Actually write the object into the database")
+
+argsp.add_argument("path",
+                   help="Read object from <file>")
+
+def cmd_hash_object(args):
+    if args.write:
+        repo = repo_find()
+    else:
+        repo = None
+    
+    with open(args.path, "rb") as fd:
+        sha = object_hash(fd, args.type.encode(), repo)
+        print(sha)
+
+def object_hash(fd, fmt, repo=None):
+    """ Hash object, writing it to repo if provided """
+    data = fd.read()
+
+    # Choose constructor according to fmt argument
+    match fmt:
+        case b'commit' : obj=GitCommit(data)
+        case b'tree' : obj=GitTree(data)
+        case b'tag' : obj=GitTag(data)
+        case b'blob' : obj=GitBlob(data)
+        case _: raise Exception("Unknown type %s" % fmt)
+    
+    return object_write(obj, repo)
+
+# Key-Value List with Message
+def kvlm_parse(raw, start=0, dct=None):
+    if not dct: 
+        dct = collections.OrderedDict() # Can't use just OrderedDict()
+    
+    # Search for the next space and the next newline
+    spc = raw.find(b' ', start)
+    nl = raw.find(b'\n', start)
+
+    if (spc < 0) or (nl < spc):
+        assert nl == start
+        dct[None] = raw[start+1:]
+        return dct
+    
+    # Recursive case
+    key = raw[start:spc]
+
+    # Find the end of the value
+    end = start
+    while True:
+        end = raw.find(b'\n', end+1)
+        if raw[end+1] != ord(' '): 
+            break
+    
+    # Grab the value
+    value = raw[spc+1:end].replce(b'\n', b'\n')
+
+    # Don't overwrite existing data contents
+    if key in dct:
+        if type(dct[key]) == list:
+            dct[key].append(value)
+        else:
+            dct[key] = [ dct[key], value ]
+    else:
+        dct[key]=value
+    
+    return kvlm_parse(raw, start=end+1, dct=dct)
+
+def kvlm_serialize(kvlm):
+    ret = b''
+
+    # Output fields
+    for k in kvlm.keys():
+        # Skip the message
+        if k == None: 
+            continue
+        val = kvlm[k]
+        # Normalize to a list
+        if type(val) != list:
+            val = [ val ]
+        
+        for v in val:
+            ret += k + b' ' + (v.replace(b'\n', b'\n')) + b'\n'
+    # Append message
+    ret += b'\n' + kvlm[None] + b'\n'
+
+    return ret
+
+class GitCommit(GitObject):
+    fmt=b'commit'
+
+    def deserialize(self, data):
+        self.kvlm = kvlm_parse(data)
+    
+    def serialize(self):
+        return kvlm_serialize(self.kvlm)
+
+    def init(self):
+        self.kvlm = dict()
+
+    
