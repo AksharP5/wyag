@@ -13,8 +13,10 @@ import zlib
 
 argparser = argparse.ArgumentParser(description="The stupidest content tracker")
 
-# Handle subparsers
-# dest="command" | the name of the chosen subparser will be returned as a string in a field called command
+"""
+Handle subparsers
+dest="command" | the name of the chosen subparser will be returned as a string in a field called command
+"""
 argsubparsers = argparser.add_subparsers(title="Commands", dest="command")
 argsubparsers.required = True
 
@@ -37,4 +39,34 @@ def main(argv=sys.argv[1:]):
         case "status" : cmd_status(args)
         case "tag" : cmd_tag(args)
         case _ : print("Bad command!")
+
+class GitRepository(object):
+    """A git repository"""
+
+    worktree = None # Where the files meant to be in version control live
+    gitdir = None # Where Git stores its own data
+    conf = None
+
+    """
+    Constructor takes an optional force which disables all checks
+    """
+    def __init__(self, path, force=False):
+        self.worktree = path
+        self.gitdir = os.path.join(path, ".git")
+
+        if not (force or os.path.isdir(self.gitdir)):
+            raise Exception("Not a Git repository %s" % path)
+        
+        self.conf = configparser.ConfigParser() # Read configuration file in .git/config
+        cf = repo_file(self, "config")
+
+        if cf and os.path.exists(cf):
+            self.conf.read([cf])
+        elif not force:
+            raise Exception("Configuration file missing")
+        
+        if not force:
+            vers = int(self.conf.get("core", "repositoryformatversion"))
+            if vers != 0:
+                raise Exception("Unsupported repositoryformatversion %s" % vers)
 
