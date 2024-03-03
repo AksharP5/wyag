@@ -115,7 +115,7 @@ def repo_create(path):
     assert repo_dir(repo, "branches", mkdir=True)
     assert repo_dir(repo, "objects", mkdir=True)
     assert repo_dir(repo, "refs", "tags", mkdir=True)
-    assert repo_dir(repo, "refs", "heads" mkdir=True)
+    assert repo_dir(repo, "refs", "heads", mkdir=True)
 
     #.git/description
     with open(repo_file(repo, "description"), "w") as f:
@@ -150,4 +150,15 @@ def repo_default_config():
     ret.set("core", "bare", "false")
 
     return ret
+
+argsp = argsubparsers.add_parser("init", help="Initialize a new, empty repository")
+
+argsp.add_argument("path",
+                   metavar="directory",
+                   nargs="?",
+                   default=".",
+                   help="Where to create the repository")
+
+def cmd_init(args):
+    repo_create(args.path)
 
